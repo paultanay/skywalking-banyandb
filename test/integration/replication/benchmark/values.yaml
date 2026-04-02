@@ -1,0 +1,22 @@
+cluster:
+  enabled: true
+  liaison:
+    replicas: 1
+  data:
+    nodeTemplate:
+      replicas: 3
+standalone:
+  enabled: false
+etcd:
+  enabled: true
+image:
+  repository: apache/skywalking-banyandb
+  tag: latest
+  pullPolicy: Never
+storage:
+  data:
+    size: 1Gi
+  stream:
+    size: 1Gi
+  measure:
+    size: 1Gi
