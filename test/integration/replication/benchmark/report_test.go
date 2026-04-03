@@ -27,7 +27,7 @@ import (
 
 func TestWriteReport(t *testing.T) {
 	dir := t.TempDir()
-	report := Report{
+	report := BenchReport{
 		GeneratedAt: time.Now(),
 		Config:      LoadConfig(),
 		Results: []RFResult{{
@@ -44,7 +44,7 @@ func TestWriteReport(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read report: %v", err)
 	}
-	var parsed Report
+	var parsed BenchReport
 	if err := json.Unmarshal(data, &parsed); err != nil {
 		t.Fatalf("unmarshal report: %v", err)
 	}

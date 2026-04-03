@@ -25,7 +25,7 @@ import (
 	"time"
 )
 
-type Report struct {
+type BenchReport struct {
 	GeneratedAt time.Time  `json:"generated_at"`
 	Config      Config     `json:"config"`
 	Results     []RFResult `json:"results"`
@@ -70,7 +70,7 @@ type ResourceStats struct {
 	PeakCPUPercent float64 `json:"peak_cpu_percent"`
 }
 
-func writeReport(report Report, dir string) (string, error) {
+func writeReport(report BenchReport, dir string) (string, error) {
 	if dir == "" {
 		resolved, err := resolveDefaultReportDir()
 		if err != nil {

@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/prometheus/common/expfmt"
+	"github.com/prometheus/common/model"
 )
 
 type PromMetrics struct {
@@ -56,7 +57,7 @@ type ResourceStatsSeries struct {
 }
 
 func parsePromMetrics(r io.Reader) (PromMetrics, error) {
-	parser := expfmt.TextParser{}
+	parser := expfmt.NewTextParser(model.UTF8Validation)
 	families, err := parser.TextToMetricFamilies(r)
 	if err != nil {
 		return PromMetrics{}, err
@@ -66,6 +67,8 @@ func parsePromMetrics(r io.Reader) (PromMetrics, error) {
 		for _, m := range mf.Metric {
 			if m.Counter != nil {
 				metrics.CPUTotalSeconds += m.Counter.GetValue()
+			} else if m.Untyped != nil {
+				metrics.CPUTotalSeconds += m.Untyped.GetValue()
 			}
 		}
 	}
@@ -73,6 +76,8 @@ func parsePromMetrics(r io.Reader) (PromMetrics, error) {
 		for _, m := range mf.Metric {
 			if m.Gauge != nil {
 				metrics.RSSBytes += m.Gauge.GetValue()
+			} else if m.Untyped != nil {
+				metrics.RSSBytes += m.Untyped.GetValue()
 			}
 		}
 	}
@@ -82,16 +87,26 @@ func parsePromMetrics(r io.Reader) (PromMetrics, error) {
 				metrics.CPUNum = m.Gauge.GetValue()
 				break
 			}
+			if m.Untyped != nil {
+				metrics.CPUNum = m.Untyped.GetValue()
+				break
+			}
 		}
 	}
 	if mf, ok := families["banyandb_system_memory_state"]; ok {
 		for _, m := range mf.Metric {
-			if m.Gauge == nil {
+			val := 0.0
+			if m.Gauge != nil {
+				val = m.Gauge.GetValue()
+			} else if m.Untyped != nil {
+				val = m.Untyped.GetValue()
+			}
+			if val == 0 {
 				continue
 			}
 			for _, label := range m.Label {
 				if label.GetName() == "kind" && label.GetValue() == "total" {
-					metrics.TotalMemBytes += m.Gauge.GetValue()
+					metrics.TotalMemBytes += val
 				}
 			}
 		}
