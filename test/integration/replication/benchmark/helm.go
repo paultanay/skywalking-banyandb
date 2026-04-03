@@ -29,7 +29,14 @@ const (
 )
 
 func buildLocalImage(ctx context.Context, repoRoot string) error {
-	_, err := runCommand(ctx, "make", "-C", filepath.Join(repoRoot, "banyand"), "docker")
+	env := map[string]string{
+		"RELEASE_VERSION": "local",
+		"GOTOOLCHAIN":     "go1.25.8",
+	}
+	if _, err := runCommandEnv(ctx, env, "make", "-C", filepath.Join(repoRoot, "banyand"), "release"); err != nil {
+		return err
+	}
+	_, err := runCommandEnv(ctx, env, "make", "-C", filepath.Join(repoRoot, "banyand"), "docker")
 	return err
 }
 
