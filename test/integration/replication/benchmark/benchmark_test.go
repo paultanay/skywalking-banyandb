@@ -29,7 +29,7 @@ import (
 var _ = Describe("Replication Benchmark", func() {
 	It("runs replication benchmarks across RFs", func() {
 		cfg := LoadConfig()
-		report := Report{GeneratedAt: time.Now(), Config: cfg}
+		report := BenchReport{GeneratedAt: time.Now(), Config: cfg}
 
 		for _, rf := range []int{1, 2, 3} {
 			By(fmt.Sprintf("Running benchmark with RF=%d", rf))
