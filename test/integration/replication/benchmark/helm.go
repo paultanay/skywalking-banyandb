@@ -33,6 +33,9 @@ func buildLocalImage(ctx context.Context, repoRoot string) error {
 		"RELEASE_VERSION": "local",
 		"GOTOOLCHAIN":     "go1.25.8",
 	}
+	if _, err := runCommandEnv(ctx, env, "make", "-C", filepath.Join(repoRoot, "ui"), "build"); err != nil {
+		return err
+	}
 	if _, err := runCommandEnv(ctx, env, "make", "-C", filepath.Join(repoRoot, "banyand"), "release"); err != nil {
 		return err
 	}
