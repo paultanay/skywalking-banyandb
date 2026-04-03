@@ -20,6 +20,7 @@ package benchmark
 import (
 	"context"
 	"path/filepath"
+	"strings"
 )
 
 const (
@@ -28,8 +29,28 @@ const (
 
 func createKindCluster(ctx context.Context, repoRoot string) error {
 	configPath := filepath.Join(repoRoot, "test", "fodc", "kind.yaml")
-	_, err := runCommand(ctx, "kind", "create", "cluster", "--name", kindClusterName, "--config", configPath)
+	exists, err := kindClusterExists(ctx)
+	if err != nil {
+		return err
+	}
+	if exists {
+		_ = deleteKindCluster(ctx)
+	}
+	_, err = runCommand(ctx, "kind", "create", "cluster", "--name", kindClusterName, "--config", configPath)
 	return err
+}
+
+func kindClusterExists(ctx context.Context) (bool, error) {
+	out, err := runCommand(ctx, "kind", "get", "clusters")
+	if err != nil {
+		return false, err
+	}
+	for _, line := range strings.Split(out, "\n") {
+		if strings.TrimSpace(line) == kindClusterName {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func deleteKindCluster(ctx context.Context) error {
