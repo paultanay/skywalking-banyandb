@@ -35,9 +35,10 @@ type kubeOwnerRef struct {
 }
 
 type kubeMetadata struct {
-	Name            string         `json:"name"`
-	Namespace       string         `json:"namespace"`
-	OwnerReferences []kubeOwnerRef `json:"ownerReferences"`
+	Name            string            `json:"name"`
+	Namespace       string            `json:"namespace"`
+	Labels          map[string]string `json:"labels"`
+	OwnerReferences []kubeOwnerRef    `json:"ownerReferences"`
 }
 
 type kubeContainerPort struct {
@@ -63,7 +64,8 @@ type kubeServicePort struct {
 }
 
 type kubeServiceSpec struct {
-	Ports []kubeServicePort `json:"ports"`
+	ClusterIP string            `json:"clusterIP"`
+	Ports     []kubeServicePort `json:"ports"`
 }
 
 type kubeService struct {
@@ -122,8 +124,15 @@ func discoverDataPods(pods []kubePod) []kubePod {
 func discoverLiaisonPods(pods []kubePod) []kubePod {
 	var liaisonPods []kubePod
 	for _, pod := range pods {
+		if pod.Metadata.Labels["app.kubernetes.io/component"] == "liaison" {
+			liaisonPods = append(liaisonPods, pod)
+			continue
+		}
 		for _, owner := range pod.Metadata.OwnerReferences {
-			if owner.Kind == "ReplicaSet" || owner.Kind == "Deployment" {
+			if owner.Kind == "ReplicaSet" || owner.Kind == "Deployment" || owner.Kind == "StatefulSet" {
+				if strings.Contains(owner.Name, "etcd") || strings.Contains(owner.Name, "data") {
+					continue
+				}
 				liaisonPods = append(liaisonPods, pod)
 				break
 			}
@@ -137,14 +146,53 @@ func discoverLiaisonPods(pods []kubePod) []kubePod {
 
 func discoverGRPCService(services []kubeService) (kubeService, error) {
 	for _, svc := range services {
+		if svc.Metadata.Labels["app.kubernetes.io/component"] != "liaison" {
+			continue
+		}
+		if !serviceExposesPort(svc, 17912) {
+			continue
+		}
+		if isHeadlessService(svc) {
+			continue
+		}
+		return svc, nil
+	}
+	for _, svc := range services {
+		if svc.Metadata.Labels["app.kubernetes.io/component"] != "liaison" {
+			continue
+		}
+		if serviceExposesPort(svc, 17912) {
+			return svc, nil
+		}
+	}
+	for _, svc := range services {
 		if strings.Contains(svc.Metadata.Name, "etcd") {
 			continue
 		}
-		for _, port := range svc.Spec.Ports {
-			if port.Port == 17912 {
-				return svc, nil
-			}
+		if serviceExposesPort(svc, 17912) && !isHeadlessService(svc) {
+			return svc, nil
+		}
+	}
+	for _, svc := range services {
+		if strings.Contains(svc.Metadata.Name, "etcd") {
+			continue
+		}
+		if serviceExposesPort(svc, 17912) {
+			return svc, nil
 		}
 	}
 	return kubeService{}, fmt.Errorf("no gRPC service exposing port 17912 found")
+}
+
+func serviceExposesPort(svc kubeService, port int) bool {
+	for _, p := range svc.Spec.Ports {
+		if p.Port == port {
+			return true
+		}
+	}
+	return false
+}
+
+func isHeadlessService(svc kubeService) bool {
+	return strings.EqualFold(svc.Spec.ClusterIP, "none")
 }

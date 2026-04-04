@@ -2,7 +2,15 @@ cluster:
   enabled: true
   liaison:
     replicas: 1
+    env:
+      - name: BYDB_NODE_DISCOVERY_MODE
+        value: etcd
   data:
+    roles:
+      hot:
+        env:
+          - name: BYDB_NODE_DISCOVERY_MODE
+            value: etcd
     nodeTemplate:
       replicas: 3
 standalone:
@@ -17,7 +25,7 @@ storage:
   data:
     enabled: true
     persistentVolumeClaims:
-      - mountTargets: ["measure", "stream", "trace", "property"]
+      - mountTargets: ["measure", "stream", "trace", "property", "schema-property"]
         nodeRole: hot
         claimName: hot-benchmark-data
         size: 2Gi

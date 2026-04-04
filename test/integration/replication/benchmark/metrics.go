@@ -20,6 +20,7 @@ package benchmark
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -144,10 +145,10 @@ func collectSeries(ctx context.Context, interval time.Duration, endpoints []stri
 		return series, fmt.Errorf("metrics endpoints must not be empty")
 	}
 
-	scrapeAll := func(t time.Time) error {
+	scrapeAll := func(scrapeCtx context.Context, t time.Time) error {
 		var sum PromMetrics
 		for _, ep := range endpoints {
-			metrics, err := scrapeMetrics(ctx, ep)
+			metrics, err := scrapeMetrics(scrapeCtx, ep)
 			if err != nil {
 				return err
 			}
@@ -166,7 +167,10 @@ func collectSeries(ctx context.Context, interval time.Duration, endpoints []stri
 		return nil
 	}
 
-	if err := scrapeAll(time.Now()); err != nil {
+	if err := scrapeAll(ctx, time.Now()); err != nil {
+		if ctx.Err() != nil || errors.Is(err, context.Canceled) {
+			return series, nil
+		}
 		return series, err
 	}
 
@@ -176,9 +180,18 @@ func collectSeries(ctx context.Context, interval time.Duration, endpoints []stri
 	for {
 		select {
 		case <-ctx.Done():
+			finalCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			_ = scrapeAll(finalCtx, time.Now())
+			cancel()
 			return series, nil
 		case t := <-ticker.C:
-			if err := scrapeAll(t); err != nil {
+			if ctx.Err() != nil {
+				return series, nil
+			}
+			if err := scrapeAll(ctx, t); err != nil {
+				if ctx.Err() != nil || errors.Is(err, context.Canceled) {
+					return series, nil
+				}
 				return series, err
 			}
 		}
