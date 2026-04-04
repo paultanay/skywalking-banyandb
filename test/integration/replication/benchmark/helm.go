@@ -26,12 +26,12 @@ import (
 const (
 	benchmarkRelease = "banyandb-bench"
 	localImage       = "apache/skywalking-banyandb:latest"
+	localSlimImage   = "apache/skywalking-banyandb:latest-slim"
 )
 
 func buildLocalImage(ctx context.Context, repoRoot string) error {
 	env := map[string]string{
 		"RELEASE_VERSION": "local",
-		"GOTOOLCHAIN":     "go1.25.8",
 	}
 	if _, err := runCommandEnv(ctx, env, "make", "-C", filepath.Join(repoRoot, "ui"), "build"); err != nil {
 		return err
@@ -39,8 +39,15 @@ func buildLocalImage(ctx context.Context, repoRoot string) error {
 	if _, err := runCommandEnv(ctx, env, "make", "-C", filepath.Join(repoRoot, "banyand"), "release"); err != nil {
 		return err
 	}
-	_, err := runCommandEnv(ctx, env, "make", "-C", filepath.Join(repoRoot, "banyand"), "docker")
-	return err
+	if _, err := runCommandEnv(ctx, env, "make", "-C", filepath.Join(repoRoot, "banyand"), "docker"); err != nil {
+		return err
+	}
+	if _, err := runCommand(ctx, "docker", "image", "inspect", localSlimImage); err != nil {
+		if _, tagErr := runCommand(ctx, "docker", "tag", localImage, localSlimImage); tagErr != nil {
+			return tagErr
+		}
+	}
+	return nil
 }
 
 func installChart(ctx context.Context, repoRoot, namespace string, cfg Config) error {

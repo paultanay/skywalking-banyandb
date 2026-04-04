@@ -38,6 +38,7 @@ var _ = Describe("Replication Benchmark", func() {
 			cancel()
 			Expect(err).NotTo(HaveOccurred())
 			report.Results = append(report.Results, result)
+			AddReportEntry(fmt.Sprintf("RF=%d benchmark summary", rf), formatRFResultSummary(result))
 			By(fmt.Sprintf("RF=%d write throughput %.2f points/s, read p95 %.2f ms", rf, result.Write.ThroughputPps, result.Read.P95Ms))
 		}
 

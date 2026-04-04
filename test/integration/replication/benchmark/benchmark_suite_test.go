@@ -47,6 +47,7 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	Expect(createKindCluster(ctx, repoRoot)).To(Succeed())
 	Expect(buildLocalImage(ctx, repoRoot)).To(Succeed())
 	Expect(loadImageToKind(ctx, localImage)).To(Succeed())
+	Expect(loadImageToKind(ctx, localSlimImage)).To(Succeed())
 	return []byte(repoRoot)
 }, func(data []byte) {
 	repoRoot = string(data)

@@ -29,6 +29,9 @@ import (
 
 func runBenchmarkRF(ctx context.Context, repoRoot string, cfg Config, rf int) (RFResult, error) {
 	result := RFResult{ReplicationFactor: rf}
+	if err := cfg.Validate(); err != nil {
+		return result, err
+	}
 	namespace := fmt.Sprintf("banyandb-bench-rf-%d-%d", rf, time.Now().UnixNano())
 
 	if err := installChart(ctx, repoRoot, namespace, cfg); err != nil {
@@ -53,6 +56,12 @@ func runBenchmarkRF(ctx context.Context, repoRoot string, cfg Config, rf int) (R
 	}
 	dataPods := discoverDataPods(pods)
 	liaisonPods := discoverLiaisonPods(pods)
+	if len(dataPods) == 0 {
+		return result, fmt.Errorf("no data pods discovered in namespace %s", namespace)
+	}
+	if len(liaisonPods) == 0 {
+		return result, fmt.Errorf("no liaison pods discovered in namespace %s", namespace)
+	}
 	grpcService, err := discoverGRPCService(services)
 	if err != nil {
 		return result, err

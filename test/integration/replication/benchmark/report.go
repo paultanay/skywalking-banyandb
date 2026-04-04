@@ -118,3 +118,35 @@ func findRepoRoot(start string) string {
 		dir = parent
 	}
 }
+
+func formatRFResultSummary(result RFResult) string {
+	return fmt.Sprintf(
+		"RF=%d\nwrite: total=%d points duration=%.2fs throughput=%.2f points/s\nread: samples=%d min=%.2fms median=%.2fms p95=%.2fms p99=%.2fms max=%.2fms\nresources(write): liaison cpu(mean/peak)=%.2f%%/%.2f%% rss(peak)=%.2f%% (%d bytes), data cpu(mean/peak)=%.2f%%/%.2f%% rss(peak)=%.2f%% (%d bytes)\nresources(read): liaison cpu(mean/peak)=%.2f%%/%.2f%% rss(peak)=%.2f%% (%d bytes), data cpu(mean/peak)=%.2f%%/%.2f%% rss(peak)=%.2f%% (%d bytes)",
+		result.ReplicationFactor,
+		result.Write.TotalPoints,
+		result.Write.DurationSec,
+		result.Write.ThroughputPps,
+		result.Read.Samples,
+		result.Read.MinMs,
+		result.Read.MedianMs,
+		result.Read.P95Ms,
+		result.Read.P99Ms,
+		result.Read.MaxMs,
+		result.Resources.WritePhase.Liaison.MeanCPUPercent,
+		result.Resources.WritePhase.Liaison.PeakCPUPercent,
+		result.Resources.WritePhase.Liaison.PeakRSSPercent,
+		result.Resources.WritePhase.Liaison.PeakRSSBytes,
+		result.Resources.WritePhase.Data.MeanCPUPercent,
+		result.Resources.WritePhase.Data.PeakCPUPercent,
+		result.Resources.WritePhase.Data.PeakRSSPercent,
+		result.Resources.WritePhase.Data.PeakRSSBytes,
+		result.Resources.ReadPhase.Liaison.MeanCPUPercent,
+		result.Resources.ReadPhase.Liaison.PeakCPUPercent,
+		result.Resources.ReadPhase.Liaison.PeakRSSPercent,
+		result.Resources.ReadPhase.Liaison.PeakRSSBytes,
+		result.Resources.ReadPhase.Data.MeanCPUPercent,
+		result.Resources.ReadPhase.Data.PeakCPUPercent,
+		result.Resources.ReadPhase.Data.PeakRSSPercent,
+		result.Resources.ReadPhase.Data.PeakRSSBytes,
+	)
+}
