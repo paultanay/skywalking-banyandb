@@ -18,6 +18,7 @@
 package benchmark
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"time"
@@ -60,6 +61,31 @@ func LoadConfig() Config {
 		QueryIterations:     getEnvInt("BENCH_QUERY_ITERATIONS", defaultQueryIters),
 		MetricsPollInterval: getEnvDuration("BENCH_METRICS_INTERVAL", defaultMetricsIntv),
 	}
+}
+
+func (c Config) Validate() error {
+	if c.ChartRef == "" {
+		return fmt.Errorf("BANYANDB_BENCH_CHART must not be empty")
+	}
+	if c.Writers <= 0 {
+		return fmt.Errorf("BENCH_WRITERS must be > 0")
+	}
+	if c.Entities <= 0 {
+		return fmt.Errorf("BENCH_ENTITIES must be > 0")
+	}
+	if c.PointsPerEntity <= 0 {
+		return fmt.Errorf("BENCH_POINTS_PER_ENTITY must be > 0")
+	}
+	if c.QueryWorkers <= 0 {
+		return fmt.Errorf("BENCH_QUERY_WORKERS must be > 0")
+	}
+	if c.QueryIterations <= 0 {
+		return fmt.Errorf("BENCH_QUERY_ITERATIONS must be > 0")
+	}
+	if c.MetricsPollInterval <= 0 {
+		return fmt.Errorf("BENCH_METRICS_INTERVAL must be > 0")
+	}
+	return nil
 }
 
 func getEnvString(key, def string) string {

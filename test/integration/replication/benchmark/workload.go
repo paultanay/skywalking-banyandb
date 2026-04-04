@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"math/rand"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -121,10 +120,10 @@ func writeMeasureData(ctx context.Context, conn *grpc.ClientConn, cfg Config, ba
 				FieldNames: []string{benchFieldName},
 			}
 			metadata := &commonv1.Metadata{Name: benchMeasure, Group: benchGroupName}
-			messageID := uint64(time.Now().UnixNano())
 			for entityIdx := startEntity; entityIdx < endEntity; entityIdx++ {
 				entityID := fmt.Sprintf("entity-%d", entityIdx)
 				for pointIdx := 0; pointIdx < points; pointIdx++ {
+					messageID := uint64(entityIdx*points + pointIdx + 1)
 					req := &measurev1.WriteRequest{
 						Metadata:      metadata,
 						DataPointSpec: spec,
@@ -144,7 +143,6 @@ func writeMeasureData(ctx context.Context, conn *grpc.ClientConn, cfg Config, ba
 					if err := stream.Send(req); err != nil {
 						return err
 					}
-					messageID++
 					metadata = nil
 					spec = nil
 				}
@@ -169,23 +167,31 @@ func writeMeasureData(ctx context.Context, conn *grpc.ClientConn, cfg Config, ba
 	}
 	elapsed := time.Since(start)
 	totalPoints := entities * points
+	throughput := 0.0
+	if elapsed > 0 {
+		throughput = float64(totalPoints) / elapsed.Seconds()
+	}
 	return WriteResult{
 		TotalPoints:   totalPoints,
 		DurationSec:   elapsed.Seconds(),
-		ThroughputPps: float64(totalPoints) / elapsed.Seconds(),
+		ThroughputPps: throughput,
 	}, nil
 }
 
 func waitForVisibility(ctx context.Context, conn *grpc.ClientConn, base time.Time, expected int) error {
 	client := measurev1.NewMeasureServiceClient(conn)
 	deadline := time.Now().Add(stabilizeTimeout)
+	limit := uint32(queryLimit)
+	if expected > queryLimit {
+		limit = uint32(expected)
+	}
 	for time.Now().Before(deadline) {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
 		}
-		req := buildQueryRequest(base, "entity-0")
+		req := buildQueryRequest(base, "entity-0", limit)
 		resp, err := client.Query(ctx, req)
 		if err == nil && len(resp.DataPoints) >= expected {
 			return nil
@@ -198,6 +204,9 @@ func waitForVisibility(ctx context.Context, conn *grpc.ClientConn, base time.Tim
 func runReadQueries(ctx context.Context, conn *grpc.ClientConn, cfg Config, base time.Time) ([]time.Duration, error) {
 	client := measurev1.NewMeasureServiceClient(conn)
 	nTargets := int(math.Min(20, float64(cfg.Entities)))
+	if nTargets <= 0 {
+		return nil, fmt.Errorf("no read targets configured")
+	}
 	entityTargets := make([]string, nTargets)
 	for i := 0; i < nTargets; i++ {
 		entityTargets[i] = fmt.Sprintf("entity-%d", i)
@@ -207,21 +216,18 @@ func runReadQueries(ctx context.Context, conn *grpc.ClientConn, cfg Config, base
 	if workers <= 0 {
 		workers = 1
 	}
-	jobs := make(chan int, iterations)
+	jobs := make(chan string, iterations)
 	for i := 0; i < iterations; i++ {
-		jobs <- i
+		jobs <- entityTargets[i%len(entityTargets)]
 	}
 	close(jobs)
 
 	group, gctx := errgroup.WithContext(ctx)
 	results := make(chan time.Duration, iterations)
 	for w := 0; w < workers; w++ {
-		seed := int64(42 + w)
 		group.Go(func() error {
-			rng := rand.New(rand.NewSource(seed))
-			for range jobs {
-				entity := entityTargets[rng.Intn(len(entityTargets))]
-				req := buildQueryRequest(base, entity)
+			for entity := range jobs {
+				req := buildQueryRequest(base, entity, queryLimit)
 				start := time.Now()
 				_, err := client.Query(gctx, req)
 				if err != nil {
@@ -243,7 +249,7 @@ func runReadQueries(ctx context.Context, conn *grpc.ClientConn, cfg Config, base
 	return durations, nil
 }
 
-func buildQueryRequest(base time.Time, entity string) *measurev1.QueryRequest {
+func buildQueryRequest(base time.Time, entity string, limit uint32) *measurev1.QueryRequest {
 	return &measurev1.QueryRequest{
 		Groups: []string{benchGroupName},
 		Name:   benchMeasure,
@@ -267,7 +273,7 @@ func buildQueryRequest(base time.Time, entity string) *measurev1.QueryRequest {
 			}},
 		},
 		FieldProjection: &measurev1.QueryRequest_FieldProjection{Names: []string{benchFieldName}},
-		Limit:           queryLimit,
+		Limit:           limit,
 	}
 }
 

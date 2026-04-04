@@ -33,10 +33,8 @@ func runCommand(ctx context.Context, name string, args ...string) (string, error
 func runCommandEnv(ctx context.Context, env map[string]string, name string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Env = append(cmd.Env, os.Environ()...)
-	if env != nil {
-		for k, v := range env {
-			cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
-		}
+	for k, v := range env {
+		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
 	}
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout

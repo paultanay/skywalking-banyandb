@@ -137,6 +137,39 @@ func scrapeMetrics(ctx context.Context, url string) (PromMetrics, error) {
 
 func collectSeries(ctx context.Context, interval time.Duration, endpoints []string) (AggregatedSeries, error) {
 	series := AggregatedSeries{}
+	if interval <= 0 {
+		return series, fmt.Errorf("metrics collection interval must be > 0")
+	}
+	if len(endpoints) == 0 {
+		return series, fmt.Errorf("metrics endpoints must not be empty")
+	}
+
+	scrapeAll := func(t time.Time) error {
+		var sum PromMetrics
+		for _, ep := range endpoints {
+			metrics, err := scrapeMetrics(ctx, ep)
+			if err != nil {
+				return err
+			}
+			sum.CPUTotalSeconds += metrics.CPUTotalSeconds
+			sum.RSSBytes += metrics.RSSBytes
+			sum.CPUNum += metrics.CPUNum
+			sum.TotalMemBytes += metrics.TotalMemBytes
+		}
+		series.Samples = append(series.Samples, AggregatedSample{
+			Timestamp:   t,
+			CPUSeconds:  sum.CPUTotalSeconds,
+			RSSBytes:    sum.RSSBytes,
+			CPUNum:      sum.CPUNum,
+			TotalMemory: sum.TotalMemBytes,
+		})
+		return nil
+	}
+
+	if err := scrapeAll(time.Now()); err != nil {
+		return series, err
+	}
+
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
@@ -145,24 +178,9 @@ func collectSeries(ctx context.Context, interval time.Duration, endpoints []stri
 		case <-ctx.Done():
 			return series, nil
 		case t := <-ticker.C:
-			var sum PromMetrics
-			for _, ep := range endpoints {
-				metrics, err := scrapeMetrics(ctx, ep)
-				if err != nil {
-					return series, err
-				}
-				sum.CPUTotalSeconds += metrics.CPUTotalSeconds
-				sum.RSSBytes += metrics.RSSBytes
-				sum.CPUNum += metrics.CPUNum
-				sum.TotalMemBytes += metrics.TotalMemBytes
+			if err := scrapeAll(t); err != nil {
+				return series, err
 			}
-			series.Samples = append(series.Samples, AggregatedSample{
-				Timestamp:   t,
-				CPUSeconds:  sum.CPUTotalSeconds,
-				RSSBytes:    sum.RSSBytes,
-				CPUNum:      sum.CPUNum,
-				TotalMemory: sum.TotalMemBytes,
-			})
 		}
 	}
 }
@@ -217,7 +235,7 @@ func summarizeLatencies(durations []time.Duration) ReadResult {
 	sorted := make([]time.Duration, len(durations))
 	copy(sorted, durations)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i] < sorted[j] })
-	toMs := func(d time.Duration) float64 { return float64(d.Milliseconds()) }
+	toMs := func(d time.Duration) float64 { return float64(d) / float64(time.Millisecond) }
 	median := percentile(sorted, 0.50)
 	p95 := percentile(sorted, 0.95)
 	p99 := percentile(sorted, 0.99)

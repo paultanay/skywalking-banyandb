@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -112,6 +113,9 @@ func discoverDataPods(pods []kubePod) []kubePod {
 			}
 		}
 	}
+	sort.Slice(dataPods, func(i, j int) bool {
+		return dataPods[i].Metadata.Name < dataPods[j].Metadata.Name
+	})
 	return dataPods
 }
 
@@ -125,6 +129,9 @@ func discoverLiaisonPods(pods []kubePod) []kubePod {
 			}
 		}
 	}
+	sort.Slice(liaisonPods, func(i, j int) bool {
+		return liaisonPods[i].Metadata.Name < liaisonPods[j].Metadata.Name
+	})
 	return liaisonPods
 }
 

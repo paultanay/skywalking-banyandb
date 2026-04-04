@@ -15,8 +15,25 @@ image:
   pullPolicy: Never
 storage:
   data:
-    size: 1Gi
-  stream:
-    size: 1Gi
-  measure:
-    size: 1Gi
+    enabled: true
+    persistentVolumeClaims:
+      - mountTargets: ["measure", "stream", "trace", "property"]
+        nodeRole: hot
+        claimName: hot-benchmark-data
+        size: 2Gi
+        accessModes:
+          - ReadWriteOnce
+        storageClass: null
+        volumeMode: Filesystem
+  liaison:
+    enabled: true
+    persistentVolumeClaims:
+      - mountTargets: ["measure", "stream", "trace", "property"]
+        claimName: liaison-data
+        size: 1Gi
+        accessModes:
+          - ReadWriteOnce
+        storageClass: null
+        volumeMode: Filesystem
+  standalone:
+    enabled: false
