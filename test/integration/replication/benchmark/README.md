@@ -49,15 +49,15 @@ The suite creates a Kind cluster once, builds & loads a local BanyanDB image, th
 
 ## Environment Variables
 
-- `BANYANDB_BENCH_CHART` – chart ref/path (default: OCI ref)
-- `BANYANDB_BENCH_CHART_VERSION` – chart version when using OCI (default: 0.5.3)
-- `BANYANDB_BENCH_REPORT_DIR` – JSON report output dir (default: parent of repo)
-- `BENCH_WRITERS` – number of write workers (default: 4)
-- `BENCH_ENTITIES` – number of entities (default: 200)
-- `BENCH_POINTS_PER_ENTITY` – points per entity (default: 30)
-- `BENCH_QUERY_WORKERS` – query worker count (default: 4)
-- `BENCH_QUERY_ITERATIONS` – query iterations (default: 200)
-- `BENCH_METRICS_INTERVAL` – Prometheus scrape interval (default: 5s)
+- `BANYANDB_BENCH_CHART` - chart ref/path (default: OCI ref)
+- `BANYANDB_BENCH_CHART_VERSION` - chart version when using OCI (default: 0.5.3)
+- `BANYANDB_BENCH_REPORT_DIR` - JSON report output dir (default: parent of repo)
+- `BENCH_WRITERS` - number of write workers (default: 4)
+- `BENCH_ENTITIES` - number of entities (default: 200)
+- `BENCH_POINTS_PER_ENTITY` - points per entity (default: 30)
+- `BENCH_QUERY_WORKERS` - query worker count (default: 4)
+- `BENCH_QUERY_ITERATIONS` - query iterations (default: 200)
+- `BENCH_METRICS_INTERVAL` - Prometheus scrape interval (default: 5s)
 
 ## Outputs
 
