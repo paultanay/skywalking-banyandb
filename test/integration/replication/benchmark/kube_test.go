@@ -56,3 +56,34 @@ func TestDiscoverPodsAndService(t *testing.T) {
 		t.Fatalf("unexpected service %s", grpcSvc.Metadata.Name)
 	}
 }
+
+func TestDiscoverDataPodsExcludesLiaisonStatefulSet(t *testing.T) {
+	pods := []kubePod{
+		{
+			Metadata: kubeMetadata{
+				Name: "banyandb-data-0",
+				Labels: map[string]string{
+					"app.kubernetes.io/component": "data",
+				},
+				OwnerReferences: []kubeOwnerRef{{Kind: "StatefulSet", Name: "banyandb-data"}},
+			},
+		},
+		{
+			Metadata: kubeMetadata{
+				Name: "banyandb-liaison-0",
+				Labels: map[string]string{
+					"app.kubernetes.io/component": "liaison",
+				},
+				OwnerReferences: []kubeOwnerRef{{Kind: "StatefulSet", Name: "banyandb-liaison"}},
+			},
+		},
+	}
+
+	dataPods := discoverDataPods(pods)
+	if len(dataPods) != 1 {
+		t.Fatalf("expected 1 data pod, got %d", len(dataPods))
+	}
+	if dataPods[0].Metadata.Name != "banyandb-data-0" {
+		t.Fatalf("unexpected data pod %s", dataPods[0].Metadata.Name)
+	}
+}

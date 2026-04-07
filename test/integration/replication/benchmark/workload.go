@@ -151,12 +151,15 @@ func writeMeasureData(ctx context.Context, conn *grpc.ClientConn, cfg Config, ba
 				return err
 			}
 			for {
-				_, err := stream.Recv()
+				resp, err := stream.Recv()
 				if err != nil {
 					if err == io.EOF {
 						return nil
 					}
 					return err
+				}
+				if resp.GetStatus() != modelv1.Status_STATUS_SUCCEED.String() {
+					return fmt.Errorf("write failed for message_id=%d status=%s", resp.GetMessageId(), resp.GetStatus())
 				}
 			}
 		})

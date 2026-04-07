@@ -30,7 +30,7 @@ import (
 
 func TestBenchmark(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Replication Benchmark Suite")
+	RunSpecs(t, "Replication Benchmark Suite", Label("integration", "slow", "benchmark"))
 }
 
 var (

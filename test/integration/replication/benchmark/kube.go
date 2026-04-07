@@ -108,11 +108,23 @@ func parseServicesJSON(data []byte) ([]kubeService, error) {
 func discoverDataPods(pods []kubePod) []kubePod {
 	var dataPods []kubePod
 	for _, pod := range pods {
+		component := pod.Metadata.Labels["app.kubernetes.io/component"]
+		if component == "liaison" || component == "etcd" {
+			continue
+		}
+		if component == "data" {
+			dataPods = append(dataPods, pod)
+			continue
+		}
 		for _, owner := range pod.Metadata.OwnerReferences {
-			if owner.Kind == "StatefulSet" && !strings.Contains(owner.Name, "etcd") {
-				dataPods = append(dataPods, pod)
-				break
+			if owner.Kind != "StatefulSet" {
+				continue
 			}
+			if strings.Contains(owner.Name, "etcd") || strings.Contains(owner.Name, "liaison") {
+				continue
+			}
+			dataPods = append(dataPods, pod)
+			break
 		}
 	}
 	sort.Slice(dataPods, func(i, j int) bool {

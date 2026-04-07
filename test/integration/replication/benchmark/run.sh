@@ -1,3 +1,5 @@
+#!/bin/bash
+
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
@@ -23,4 +25,4 @@ if [[ -z "${BANYANDB_BENCH_CHART:-}" ]]; then
   echo "BANYANDB_BENCH_CHART not set; using OCI chart ${BANYANDB_BENCH_CHART_VERSION:-0.5.3}."
 fi
 
-go test ./test/integration/replication/benchmark -v
+go test ./test/integration/replication/benchmark -v -count=1
