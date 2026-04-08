@@ -25,6 +25,12 @@ import (
 	"strings"
 )
 
+const (
+	componentLiaison = "liaison"
+	componentEtcd    = "etcd"
+	componentData    = "data"
+)
+
 type kubeList[T any] struct {
 	Items []T `json:"items"`
 }
@@ -59,8 +65,8 @@ type kubePod struct {
 }
 
 type kubeServicePort struct {
-	Port int    `json:"port"`
 	Name string `json:"name"`
+	Port int    `json:"port"`
 }
 
 type kubeServiceSpec struct {
@@ -109,10 +115,10 @@ func discoverDataPods(pods []kubePod) []kubePod {
 	var dataPods []kubePod
 	for _, pod := range pods {
 		component := pod.Metadata.Labels["app.kubernetes.io/component"]
-		if component == "liaison" || component == "etcd" {
+		if component == componentLiaison || component == componentEtcd {
 			continue
 		}
-		if component == "data" {
+		if component == componentData {
 			dataPods = append(dataPods, pod)
 			continue
 		}
@@ -120,7 +126,7 @@ func discoverDataPods(pods []kubePod) []kubePod {
 			if owner.Kind != "StatefulSet" {
 				continue
 			}
-			if strings.Contains(owner.Name, "etcd") || strings.Contains(owner.Name, "liaison") {
+			if strings.Contains(owner.Name, componentEtcd) || strings.Contains(owner.Name, componentLiaison) {
 				continue
 			}
 			dataPods = append(dataPods, pod)
@@ -136,13 +142,13 @@ func discoverDataPods(pods []kubePod) []kubePod {
 func discoverLiaisonPods(pods []kubePod) []kubePod {
 	var liaisonPods []kubePod
 	for _, pod := range pods {
-		if pod.Metadata.Labels["app.kubernetes.io/component"] == "liaison" {
+		if pod.Metadata.Labels["app.kubernetes.io/component"] == componentLiaison {
 			liaisonPods = append(liaisonPods, pod)
 			continue
 		}
 		for _, owner := range pod.Metadata.OwnerReferences {
 			if owner.Kind == "ReplicaSet" || owner.Kind == "Deployment" || owner.Kind == "StatefulSet" {
-				if strings.Contains(owner.Name, "etcd") || strings.Contains(owner.Name, "data") {
+				if strings.Contains(owner.Name, componentEtcd) || strings.Contains(owner.Name, componentData) {
 					continue
 				}
 				liaisonPods = append(liaisonPods, pod)
@@ -158,7 +164,7 @@ func discoverLiaisonPods(pods []kubePod) []kubePod {
 
 func discoverGRPCService(services []kubeService) (kubeService, error) {
 	for _, svc := range services {
-		if svc.Metadata.Labels["app.kubernetes.io/component"] != "liaison" {
+		if svc.Metadata.Labels["app.kubernetes.io/component"] != componentLiaison {
 			continue
 		}
 		if !serviceExposesPort(svc, 17912) {
@@ -170,7 +176,7 @@ func discoverGRPCService(services []kubeService) (kubeService, error) {
 		return svc, nil
 	}
 	for _, svc := range services {
-		if svc.Metadata.Labels["app.kubernetes.io/component"] != "liaison" {
+		if svc.Metadata.Labels["app.kubernetes.io/component"] != componentLiaison {
 			continue
 		}
 		if serviceExposesPort(svc, 17912) {
@@ -178,7 +184,7 @@ func discoverGRPCService(services []kubeService) (kubeService, error) {
 		}
 	}
 	for _, svc := range services {
-		if strings.Contains(svc.Metadata.Name, "etcd") {
+		if strings.Contains(svc.Metadata.Name, componentEtcd) {
 			continue
 		}
 		if serviceExposesPort(svc, 17912) && !isHeadlessService(svc) {
@@ -186,7 +192,7 @@ func discoverGRPCService(services []kubeService) (kubeService, error) {
 		}
 	}
 	for _, svc := range services {
-		if strings.Contains(svc.Metadata.Name, "etcd") {
+		if strings.Contains(svc.Metadata.Name, componentEtcd) {
 			continue
 		}
 		if serviceExposesPort(svc, 17912) {

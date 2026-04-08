@@ -180,7 +180,7 @@ func collectSeries(ctx context.Context, interval time.Duration, endpoints []stri
 	for {
 		select {
 		case <-ctx.Done():
-			finalCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			finalCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
 			_ = scrapeAll(finalCtx, time.Now())
 			cancel()
 			return series, nil

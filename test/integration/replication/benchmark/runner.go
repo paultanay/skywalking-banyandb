@@ -82,8 +82,9 @@ func runBenchmarkRF(ctx context.Context, repoRoot string, cfg Config, rf int) (R
 		return result, err
 	}
 	defer conn.Close()
+	rfCtx := context.WithoutCancel(ctx)
 
-	if err := createMeasureSchema(ctx, conn, rf); err != nil {
+	if err := createMeasureSchema(rfCtx, conn, rf); err != nil {
 		return result, err
 	}
 	baseTime := time.Now().Truncate(time.Second)
@@ -106,11 +107,11 @@ func runBenchmarkRF(ctx context.Context, repoRoot string, cfg Config, rf int) (R
 	result.Write = writeStats
 	result.Resources.WritePhase = writeResources
 
-	if err := waitForVisibility(ctx, conn, baseTime, cfg.PointsPerEntity); err != nil {
+	if err = waitForVisibility(ctx, conn, baseTime, cfg.PointsPerEntity); err != nil {
 		return result, err
 	}
 
-	readStats, readResources, err := runReadPhase(ctx, conn, cfg, baseTime, liaisonEndpoints, dataEndpoints)
+	readStats, readResources, err := runReadPhase(rfCtx, conn, cfg, baseTime, liaisonEndpoints, dataEndpoints)
 	if err != nil {
 		return result, err
 	}

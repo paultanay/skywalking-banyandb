@@ -27,8 +27,8 @@ import (
 
 type BenchReport struct {
 	GeneratedAt time.Time  `json:"generated_at"`
-	Config      Config     `json:"config"`
 	Results     []RFResult `json:"results"`
+	Config      Config     `json:"config"`
 }
 
 type RFResult struct {
@@ -87,7 +87,7 @@ func writeReport(report BenchReport, dir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := os.WriteFile(path, data, 0o644); err != nil {
+	if err := os.WriteFile(path, data, 0o600); err != nil {
 		return "", err
 	}
 	return path, nil

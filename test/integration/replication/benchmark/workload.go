@@ -19,6 +19,7 @@ package benchmark
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -281,5 +282,16 @@ func buildQueryRequest(base time.Time, entity string, limit uint32) *measurev1.Q
 }
 
 func connectGRPC(addr string) (*grpc.ClientConn, error) {
-	return grpchelper.Conn(addr, 10*time.Second, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpchelper.Conn(addr, 10*time.Second, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err == nil {
+		return conn, nil
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return nil, err
+	}
+	connWithAuth, authErr := grpchelper.ConnWithAuth(addr, 10*time.Second, "", "", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if authErr != nil {
+		return nil, authErr
+	}
+	return connWithAuth, nil
 }
