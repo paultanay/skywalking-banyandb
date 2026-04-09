@@ -26,12 +26,14 @@ import (
 	"time"
 )
 
+// BenchReport is the top-level JSON report artifact for a benchmark run.
 type BenchReport struct {
 	GeneratedAt time.Time  `json:"generated_at"`
 	Results     []RFResult `json:"results"`
 	Config      Config     `json:"config"`
 }
 
+// RFResult stores one replication-factor benchmark result.
 type RFResult struct {
 	ReplicationFactor int            `json:"replication_factor"`
 	Write             WriteResult    `json:"write"`
@@ -39,12 +41,14 @@ type RFResult struct {
 	Resources         ResourceReport `json:"resources"`
 }
 
+// WriteResult describes write phase throughput and duration.
 type WriteResult struct {
 	TotalPoints   int     `json:"total_points"`
 	DurationSec   float64 `json:"duration_sec"`
 	ThroughputPps float64 `json:"throughput_points_per_sec"`
 }
 
+// ReadResult summarizes read latency percentiles.
 type ReadResult struct {
 	Samples  int     `json:"samples"`
 	MinMs    float64 `json:"min_ms"`
@@ -54,16 +58,19 @@ type ReadResult struct {
 	MaxMs    float64 `json:"max_ms"`
 }
 
+// ResourceReport contains write/read phase resource usage.
 type ResourceReport struct {
 	WritePhase ResourcePhase `json:"write_phase"`
 	ReadPhase  ResourcePhase `json:"read_phase"`
 }
 
+// ResourcePhase stores resource summaries for liaison and data roles.
 type ResourcePhase struct {
 	Liaison ResourceStats `json:"liaison"`
 	Data    ResourceStats `json:"data"`
 }
 
+// ResourceStats contains CPU and RSS summary metrics.
 type ResourceStats struct {
 	PeakRSSBytes   int64   `json:"peak_rss_bytes"`
 	PeakRSSPercent float64 `json:"peak_rss_percent"`

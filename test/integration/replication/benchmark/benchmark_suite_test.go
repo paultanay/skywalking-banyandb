@@ -15,6 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
+// Package benchmark runs replication benchmark integration tests.
 package benchmark
 
 import (

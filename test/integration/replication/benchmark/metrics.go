@@ -31,6 +31,7 @@ import (
 	"github.com/prometheus/common/model"
 )
 
+// PromMetrics contains raw counters and gauges scraped from /metrics endpoints.
 type PromMetrics struct {
 	CPUTotalSeconds float64
 	RSSBytes        float64
@@ -38,6 +39,7 @@ type PromMetrics struct {
 	TotalMemBytes   float64
 }
 
+// AggregatedSample represents one aggregated metrics scrape point.
 type AggregatedSample struct {
 	Timestamp   time.Time
 	CPUSeconds  float64
@@ -46,10 +48,12 @@ type AggregatedSample struct {
 	TotalMemory float64
 }
 
+// AggregatedSeries stores samples collected over a benchmark phase.
 type AggregatedSeries struct {
 	Samples []AggregatedSample
 }
 
+// ResourceStatsSeries summarizes CPU and memory usage over a phase.
 type ResourceStatsSeries struct {
 	MeanCPUPercent float64
 	PeakCPUPercent float64

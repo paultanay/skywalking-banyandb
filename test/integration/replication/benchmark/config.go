@@ -49,6 +49,7 @@ type Config struct {
 	MetricsPollInterval time.Duration
 }
 
+// LoadConfig reads benchmark settings from environment variables.
 func LoadConfig() Config {
 	return Config{
 		ChartRef:            getEnvString("BANYANDB_BENCH_CHART", defaultChartRef),
@@ -63,6 +64,7 @@ func LoadConfig() Config {
 	}
 }
 
+// Validate checks configuration values before benchmark execution.
 func (c Config) Validate() error {
 	if c.ChartRef == "" {
 		return fmt.Errorf("BANYANDB_BENCH_CHART must not be empty")
