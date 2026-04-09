@@ -28,13 +28,13 @@ import (
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	commonv1 "github.com/apache/skywalking-banyandb/api/proto/banyandb/common/v1"
 	databasev1 "github.com/apache/skywalking-banyandb/api/proto/banyandb/database/v1"
 	measurev1 "github.com/apache/skywalking-banyandb/api/proto/banyandb/measure/v1"
 	modelv1 "github.com/apache/skywalking-banyandb/api/proto/banyandb/model/v1"
-	"github.com/apache/skywalking-banyandb/pkg/grpchelper"
 )
 
 const (
@@ -154,7 +154,7 @@ func writeMeasureData(ctx context.Context, conn *grpc.ClientConn, cfg Config, ba
 			for {
 				resp, err := stream.Recv()
 				if err != nil {
-					if err == io.EOF {
+					if errors.Is(err, io.EOF) {
 						return nil
 					}
 					return err
@@ -281,17 +281,28 @@ func buildQueryRequest(base time.Time, entity string, limit uint32) *measurev1.Q
 	}
 }
 
-func connectGRPC(addr string) (*grpc.ClientConn, error) {
-	conn, err := grpchelper.Conn(addr, 10*time.Second, grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if err == nil {
-		return conn, nil
-	}
-	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+func connectGRPC(ctx context.Context, addr string) (*grpc.ClientConn, error) {
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
 		return nil, err
 	}
-	connWithAuth, authErr := grpchelper.ConnWithAuth(addr, 10*time.Second, "", "", grpc.WithTransportCredentials(insecure.NewCredentials()))
-	if authErr != nil {
-		return nil, authErr
+
+	client := grpc_health_v1.NewHealthClient(conn)
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		if ctx.Err() != nil {
+			_ = conn.Close()
+			return nil, ctx.Err()
+		}
+		checkCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		_, err = client.Check(checkCtx, &grpc_health_v1.HealthCheckRequest{Service: ""})
+		cancel()
+		if err == nil {
+			return conn, nil
+		}
+		time.Sleep(500 * time.Millisecond)
 	}
-	return connWithAuth, nil
+
+	_ = conn.Close()
+	return nil, fmt.Errorf("gRPC health check timeout for %s", addr)
 }

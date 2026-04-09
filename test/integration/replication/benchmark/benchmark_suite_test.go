@@ -33,9 +33,7 @@ func TestBenchmark(t *testing.T) {
 	RunSpecs(t, "Replication Benchmark Suite", Label("integration", "slow", "benchmark"))
 }
 
-var (
-	repoRoot string
-)
+var repoRoot string
 
 var _ = SynchronizedBeforeSuite(func() []byte {
 	wd, err := os.Getwd()

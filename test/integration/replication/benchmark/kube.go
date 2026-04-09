@@ -29,6 +29,7 @@ const (
 	componentLiaison = "liaison"
 	componentEtcd    = "etcd"
 	componentData    = "data"
+	grpcPort         = 17912
 )
 
 type kubeList[T any] struct {
@@ -167,7 +168,7 @@ func discoverGRPCService(services []kubeService) (kubeService, error) {
 		if svc.Metadata.Labels["app.kubernetes.io/component"] != componentLiaison {
 			continue
 		}
-		if !serviceExposesPort(svc, 17912) {
+		if !serviceExposesGRPCPort(svc) {
 			continue
 		}
 		if isHeadlessService(svc) {
@@ -179,7 +180,7 @@ func discoverGRPCService(services []kubeService) (kubeService, error) {
 		if svc.Metadata.Labels["app.kubernetes.io/component"] != componentLiaison {
 			continue
 		}
-		if serviceExposesPort(svc, 17912) {
+		if serviceExposesGRPCPort(svc) {
 			return svc, nil
 		}
 	}
@@ -187,7 +188,7 @@ func discoverGRPCService(services []kubeService) (kubeService, error) {
 		if strings.Contains(svc.Metadata.Name, componentEtcd) {
 			continue
 		}
-		if serviceExposesPort(svc, 17912) && !isHeadlessService(svc) {
+		if serviceExposesGRPCPort(svc) && !isHeadlessService(svc) {
 			return svc, nil
 		}
 	}
@@ -195,16 +196,16 @@ func discoverGRPCService(services []kubeService) (kubeService, error) {
 		if strings.Contains(svc.Metadata.Name, componentEtcd) {
 			continue
 		}
-		if serviceExposesPort(svc, 17912) {
+		if serviceExposesGRPCPort(svc) {
 			return svc, nil
 		}
 	}
-	return kubeService{}, fmt.Errorf("no gRPC service exposing port 17912 found")
+	return kubeService{}, fmt.Errorf("no gRPC service exposing port %d found", grpcPort)
 }
 
-func serviceExposesPort(svc kubeService, port int) bool {
+func serviceExposesGRPCPort(svc kubeService) bool {
 	for _, p := range svc.Spec.Ports {
-		if p.Port == port {
+		if p.Port == grpcPort {
 			return true
 		}
 	}

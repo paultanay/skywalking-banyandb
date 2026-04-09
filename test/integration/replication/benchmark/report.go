@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -120,8 +121,20 @@ func findRepoRoot(start string) string {
 }
 
 func formatRFResultSummary(result RFResult) string {
+	template := strings.Join([]string{
+		"RF=%d",
+		"write: total=%d points duration=%.2fs throughput=%.2f points/s",
+		"read: samples=%d min=%.2fms median=%.2fms p95=%.2fms p99=%.2fms max=%.2fms",
+		"resources(write): liaison cpu(mean/peak)=%.2f%%/%.2f%% " +
+			"rss(peak)=%.2f%% (%d bytes), data cpu(mean/peak)=%.2f%%/%.2f%% " +
+			"rss(peak)=%.2f%% (%d bytes)",
+		"resources(read): liaison cpu(mean/peak)=%.2f%%/%.2f%% " +
+			"rss(peak)=%.2f%% (%d bytes), data cpu(mean/peak)=%.2f%%/%.2f%% " +
+			"rss(peak)=%.2f%% (%d bytes)",
+	}, "\n")
+
 	return fmt.Sprintf(
-		"RF=%d\nwrite: total=%d points duration=%.2fs throughput=%.2f points/s\nread: samples=%d min=%.2fms median=%.2fms p95=%.2fms p99=%.2fms max=%.2fms\nresources(write): liaison cpu(mean/peak)=%.2f%%/%.2f%% rss(peak)=%.2f%% (%d bytes), data cpu(mean/peak)=%.2f%%/%.2f%% rss(peak)=%.2f%% (%d bytes)\nresources(read): liaison cpu(mean/peak)=%.2f%%/%.2f%% rss(peak)=%.2f%% (%d bytes), data cpu(mean/peak)=%.2f%%/%.2f%% rss(peak)=%.2f%% (%d bytes)",
+		template,
 		result.ReplicationFactor,
 		result.Write.TotalPoints,
 		result.Write.DurationSec,

@@ -77,14 +77,15 @@ func runBenchmarkRF(ctx context.Context, repoRoot string, cfg Config, rf int) (R
 	}
 	defer grpcPF.Stop()
 
-	conn, err := connectGRPC(fmt.Sprintf("127.0.0.1:%d", grpcPorts[0]))
+	conn, err := connectGRPC(ctx, fmt.Sprintf("127.0.0.1:%d", grpcPorts[0]))
 	if err != nil {
 		return result, err
 	}
 	defer conn.Close()
 	rfCtx := context.WithoutCancel(ctx)
 
-	if err := createMeasureSchema(rfCtx, conn, rf); err != nil {
+	err = createMeasureSchema(rfCtx, conn, rf)
+	if err != nil {
 		return result, err
 	}
 	baseTime := time.Now().Truncate(time.Second)
