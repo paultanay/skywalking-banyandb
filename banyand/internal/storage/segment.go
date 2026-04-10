@@ -40,8 +40,13 @@ import (
 	"github.com/apache/skywalking-banyandb/pkg/timestamp"
 )
 
-// ErrSegmentClosed is returned when trying to access a closed segment.
-var ErrSegmentClosed = errors.New("segment closed")
+var (
+	// ErrSegmentClosed is returned when trying to access a closed segment.
+	ErrSegmentClosed = errors.New("segment closed")
+	// ErrInvalidSegmentTimestamp is returned when a segment timestamp is zero or near-epoch,
+	// indicating a corrupted timestamp (e.g., unset MinTimestamp flowing through sync paths).
+	ErrInvalidSegmentTimestamp = errors.New("invalid segment timestamp: epoch or near-epoch time is not valid for APM data")
+)
 
 var _ Cache = (*segmentCache)(nil)
 
@@ -477,21 +482,27 @@ func (sc *segmentController[T, O]) parse(value string) (time.Time, error) {
 func (sc *segmentController[T, O]) open() error {
 	sc.Lock()
 	defer sc.Unlock()
-	emptySegments := make([]string, 0)
+	invalidSegments := make([]string, 0)
 	err := loadSegments(sc.location, segPathPrefix, sc, sc.getOptions().SegmentInterval, func(start, end time.Time) error {
 		suffix := sc.format(start)
 		segmentPath := path.Join(sc.location, fmt.Sprintf(segTemplate, suffix))
+		// Detect epoch/near-epoch segments created by zero MinTimestamp in sync paths.
+		// BanyanDB is an APM database -- no legitimate data predates the year 2000.
+		if start.UnixNano() <= 0 {
+			invalidSegments = append(invalidSegments, segmentPath)
+			return nil
+		}
 		metadataPath := path.Join(segmentPath, metadataFilename)
 		rawMeta, readErr := sc.lfs.Read(metadataPath)
 		if readErr != nil {
 			if errors.Is(readErr, fs.ErrNotExist) {
-				emptySegments = append(emptySegments, segmentPath)
+				invalidSegments = append(invalidSegments, segmentPath)
 				return nil
 			}
 			return readErr
 		}
 		if len(rawMeta) == 0 {
-			emptySegments = append(emptySegments, segmentPath)
+			invalidSegments = append(invalidSegments, segmentPath)
 			return nil
 		}
 		meta, parseErr := readSegmentMeta(rawMeta)
@@ -509,16 +520,21 @@ func (sc *segmentController[T, O]) open() error {
 		_, loadErr := sc.load(start, segmentEnd, sc.location)
 		return loadErr
 	})
-	if len(emptySegments) > 0 {
-		sc.l.Warn().Strs("segments", emptySegments).Msg("empty segments found, removing them.")
-		for i := range emptySegments {
-			sc.lfs.MustRMAll(emptySegments[i])
+	if len(invalidSegments) > 0 {
+		sc.l.Warn().Strs("segments", invalidSegments).Msg("invalid segments found (empty or epoch-dated), removing them")
+		for i := range invalidSegments {
+			sc.lfs.MustRMAll(invalidSegments[i])
 		}
 	}
 	return err
 }
 
 func (sc *segmentController[T, O]) create(start time.Time) (*segment[T, O], error) {
+	// Reject epoch/near-epoch timestamps caused by zero MinTimestamp flowing through sync paths.
+	// BanyanDB is an APM database -- no legitimate data predates the year 2000.
+	if start.UnixNano() <= 0 {
+		return nil, ErrInvalidSegmentTimestamp
+	}
 	sc.Lock()
 	defer sc.Unlock()
 	last := len(sc.lst) - 1
