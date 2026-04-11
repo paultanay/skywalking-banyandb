@@ -25,4 +25,6 @@ if [[ -z "${BANYANDB_BENCH_CHART:-}" ]]; then
   echo "BANYANDB_BENCH_CHART not set; using OCI chart ${BANYANDB_BENCH_CHART_VERSION:-0.5.3}."
 fi
 
-go test ./test/integration/replication/benchmark -v -count=1
+GO_TEST_TIMEOUT="${BANYANDB_BENCH_GO_TEST_TIMEOUT:-90m}"
+
+go test ./test/integration/replication/benchmark -v -count=1 -timeout "$GO_TEST_TIMEOUT"

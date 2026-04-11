@@ -18,23 +18,31 @@ cluster:
   liaison:
     replicas: 1
     env:
+      - name: BYDB_SCHEMA_REGISTRY_MODE
+        value: property
       - name: BYDB_NODE_DISCOVERY_MODE
-        value: etcd
+        value: dns
+      - name: BYDB_NODE_DISCOVERY_DNS_SRV_ADDRESSES
+        value: _grpc._tcp.banyandb-bench-data-hot-headless.$(POD_NAMESPACE).svc.cluster.local,_internal-grpc._tcp.banyandb-bench-liaison-headless.$(POD_NAMESPACE).svc.cluster.local
   data:
     roles:
       hot:
         env:
+          - name: BYDB_SCHEMA_REGISTRY_MODE
+            value: property
           - name: BYDB_NODE_DISCOVERY_MODE
-            value: etcd
+            value: dns
+          - name: BYDB_NODE_DISCOVERY_DNS_SRV_ADDRESSES
+            value: _grpc._tcp.banyandb-bench-data-hot-headless.$(POD_NAMESPACE).svc.cluster.local,_internal-grpc._tcp.banyandb-bench-liaison-headless.$(POD_NAMESPACE).svc.cluster.local
     nodeTemplate:
       replicas: 3
 standalone:
   enabled: false
 etcd:
-  enabled: true
+  enabled: false
 image:
   repository: apache/skywalking-banyandb
-  tag: latest
+  tag: ""
   pullPolicy: Never
 storage:
   data:

@@ -27,7 +27,6 @@ import (
 
 const (
 	componentLiaison = "liaison"
-	componentEtcd    = "etcd"
 	componentData    = "data"
 	grpcPort         = 17912
 )
@@ -116,18 +115,24 @@ func discoverDataPods(pods []kubePod) []kubePod {
 	var dataPods []kubePod
 	for _, pod := range pods {
 		component := pod.Metadata.Labels["app.kubernetes.io/component"]
-		if component == componentLiaison || component == componentEtcd {
+		if component == componentLiaison {
 			continue
 		}
 		if component == componentData {
 			dataPods = append(dataPods, pod)
 			continue
 		}
+		if component != "" {
+			continue
+		}
 		for _, owner := range pod.Metadata.OwnerReferences {
 			if owner.Kind != "StatefulSet" {
 				continue
 			}
-			if strings.Contains(owner.Name, componentEtcd) || strings.Contains(owner.Name, componentLiaison) {
+			if !strings.Contains(owner.Name, componentData) {
+				continue
+			}
+			if strings.Contains(owner.Name, componentLiaison) {
 				continue
 			}
 			dataPods = append(dataPods, pod)
@@ -143,13 +148,20 @@ func discoverDataPods(pods []kubePod) []kubePod {
 func discoverLiaisonPods(pods []kubePod) []kubePod {
 	var liaisonPods []kubePod
 	for _, pod := range pods {
-		if pod.Metadata.Labels["app.kubernetes.io/component"] == componentLiaison {
+		component := pod.Metadata.Labels["app.kubernetes.io/component"]
+		if component == componentLiaison {
 			liaisonPods = append(liaisonPods, pod)
+			continue
+		}
+		if component != "" {
 			continue
 		}
 		for _, owner := range pod.Metadata.OwnerReferences {
 			if owner.Kind == "ReplicaSet" || owner.Kind == "Deployment" || owner.Kind == "StatefulSet" {
-				if strings.Contains(owner.Name, componentEtcd) || strings.Contains(owner.Name, componentData) {
+				if !strings.Contains(owner.Name, componentLiaison) {
+					continue
+				}
+				if strings.Contains(owner.Name, componentData) {
 					continue
 				}
 				liaisonPods = append(liaisonPods, pod)
@@ -185,17 +197,11 @@ func discoverGRPCService(services []kubeService) (kubeService, error) {
 		}
 	}
 	for _, svc := range services {
-		if strings.Contains(svc.Metadata.Name, componentEtcd) {
-			continue
-		}
 		if serviceExposesGRPCPort(svc) && !isHeadlessService(svc) {
 			return svc, nil
 		}
 	}
 	for _, svc := range services {
-		if strings.Contains(svc.Metadata.Name, componentEtcd) {
-			continue
-		}
 		if serviceExposesGRPCPort(svc) {
 			return svc, nil
 		}

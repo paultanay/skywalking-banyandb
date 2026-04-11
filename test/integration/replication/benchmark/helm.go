@@ -19,22 +19,54 @@ package benchmark
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"strings"
 )
 
 const (
-	benchmarkRelease = "banyandb-bench"
-	localImage       = "apache/skywalking-banyandb:latest"
-	localSlimImage   = "apache/skywalking-banyandb:latest-slim"
+	benchmarkRelease         = "banyandb-bench"
+	benchmarkImageRepository = "apache/skywalking-banyandb"
+	builtImageRef            = benchmarkImageRepository + ":latest"
 )
+
+var benchmarkImageTag = "latest"
+
+func setBenchmarkImageTag(tag string) {
+	if tag != "" {
+		benchmarkImageTag = tag
+	}
+}
+
+func benchmarkImageRef() string {
+	return fmt.Sprintf("%s:%s", benchmarkImageRepository, benchmarkImageTag)
+}
+
+func benchmarkSlimImageRef() string {
+	return fmt.Sprintf("%s:%s-slim", benchmarkImageRepository, benchmarkImageTag)
+}
+
+func resolveBenchmarkImageTag(ctx context.Context) (string, error) {
+	out, err := runCommand(ctx, "docker", "image", "inspect", "--format", "{{.ID}}", builtImageRef)
+	if err != nil {
+		return "", err
+	}
+	id := strings.TrimSpace(out)
+	id = strings.TrimPrefix(id, "sha256:")
+	if len(id) < 12 {
+		return "", fmt.Errorf("invalid image digest %q", out)
+	}
+	return "bench-" + id[:12], nil
+}
 
 func buildLocalImage(ctx context.Context, repoRoot string) error {
 	env := map[string]string{
 		"RELEASE_VERSION": "local",
 	}
-	if _, err := runCommandEnv(ctx, env, "make", "-C", filepath.Join(repoRoot, "ui"), "build"); err != nil {
-		return err
+	if strings.EqualFold(getEnvString("BANYANDB_BENCH_BUILD_UI", "false"), "true") {
+		if _, err := runCommandEnv(ctx, env, "make", "-C", filepath.Join(repoRoot, "ui"), "build"); err != nil {
+			return err
+		}
 	}
 	if _, err := runCommandEnv(ctx, env, "make", "-C", filepath.Join(repoRoot, "banyand"), "release"); err != nil {
 		return err
@@ -42,17 +74,35 @@ func buildLocalImage(ctx context.Context, repoRoot string) error {
 	if _, err := runCommandEnv(ctx, env, "make", "-C", filepath.Join(repoRoot, "banyand"), "docker"); err != nil {
 		return err
 	}
-	if _, err := runCommand(ctx, "docker", "image", "inspect", localSlimImage); err != nil {
-		if _, tagErr := runCommand(ctx, "docker", "tag", localImage, localSlimImage); tagErr != nil {
-			return tagErr
-		}
+	imageTag, err := resolveBenchmarkImageTag(ctx)
+	if err != nil {
+		return err
+	}
+	setBenchmarkImageTag(imageTag)
+	if _, err := runCommand(ctx, "docker", "tag", builtImageRef, benchmarkImageRef()); err != nil {
+		return err
+	}
+	if _, err := runCommand(ctx, "docker", "tag", builtImageRef, benchmarkSlimImageRef()); err != nil {
+		return err
 	}
 	return nil
 }
 
 func installChart(ctx context.Context, repoRoot, namespace string, cfg Config) error {
 	valuesPath := filepath.Join(repoRoot, "test", "integration", "replication", "benchmark", "values.yaml")
-	args := []string{"upgrade", "--install", benchmarkRelease, cfg.ChartRef, "--namespace", namespace, "--create-namespace", "--values", valuesPath}
+	args := []string{
+		"upgrade",
+		"--install",
+		benchmarkRelease,
+		cfg.ChartRef,
+		"--namespace",
+		namespace,
+		"--create-namespace",
+		"--values",
+		valuesPath,
+		"--set-string",
+		"image.tag=" + benchmarkImageTag,
+	}
 	if cfg.ChartVersion != "" && strings.HasPrefix(cfg.ChartRef, "oci://") {
 		args = append(args, "--version", cfg.ChartVersion)
 	}

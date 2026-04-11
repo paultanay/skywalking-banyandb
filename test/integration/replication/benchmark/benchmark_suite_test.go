@@ -20,6 +20,7 @@ package benchmark
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -36,6 +37,11 @@ func TestBenchmark(t *testing.T) {
 
 var repoRoot string
 
+type suiteSetup struct {
+	RepoRoot string `json:"repo_root"`
+	ImageTag string `json:"image_tag"`
+}
+
 var _ = SynchronizedBeforeSuite(func() []byte {
 	wd, err := os.Getwd()
 	Expect(err).NotTo(HaveOccurred())
@@ -45,11 +51,17 @@ var _ = SynchronizedBeforeSuite(func() []byte {
 	defer cancel()
 	Expect(createKindCluster(ctx, repoRoot)).To(Succeed())
 	Expect(buildLocalImage(ctx, repoRoot)).To(Succeed())
-	Expect(loadImageToKind(ctx, localImage)).To(Succeed())
-	Expect(loadImageToKind(ctx, localSlimImage)).To(Succeed())
-	return []byte(repoRoot)
+	Expect(loadImageToKind(ctx, benchmarkImageRef())).To(Succeed())
+	Expect(loadImageToKind(ctx, benchmarkSlimImageRef())).To(Succeed())
+
+	payload, err := json.Marshal(suiteSetup{RepoRoot: repoRoot, ImageTag: benchmarkImageTag})
+	Expect(err).NotTo(HaveOccurred())
+	return payload
 }, func(data []byte) {
-	repoRoot = string(data)
+	var setup suiteSetup
+	Expect(json.Unmarshal(data, &setup)).To(Succeed())
+	repoRoot = setup.RepoRoot
+	setBenchmarkImageTag(setup.ImageTag)
 })
 
 var _ = SynchronizedAfterSuite(func() {

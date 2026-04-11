@@ -18,7 +18,6 @@
 package benchmark
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -132,12 +131,7 @@ func scrapeMetrics(ctx context.Context, url string) (PromMetrics, error) {
 	if resp.StatusCode != http.StatusOK {
 		return PromMetrics{}, fmt.Errorf("metrics endpoint %s returned %s", url, resp.Status)
 	}
-	buf := new(bytes.Buffer)
-	_, err = io.Copy(buf, resp.Body)
-	if err != nil {
-		return PromMetrics{}, err
-	}
-	return parsePromMetrics(bytes.NewReader(buf.Bytes()))
+	return parsePromMetrics(resp.Body)
 }
 
 func collectSeries(ctx context.Context, interval time.Duration, endpoints []string) (AggregatedSeries, error) {

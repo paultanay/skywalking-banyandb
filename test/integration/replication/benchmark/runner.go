@@ -38,8 +38,10 @@ func runBenchmarkRF(ctx context.Context, repoRoot string, cfg Config, rf int) (R
 		return result, err
 	}
 	defer func() {
-		_ = uninstallChart(ctx, namespace)
-		_ = deleteNamespace(ctx, namespace)
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Minute)
+		defer cancel()
+		_ = uninstallChart(cleanupCtx, namespace)
+		_ = deleteNamespace(cleanupCtx, namespace)
 	}()
 
 	if _, err := runCommand(ctx, "kubectl", "-n", namespace, "wait", "--for=condition=ready", "pod", "--all", "--timeout=600s"); err != nil {
@@ -71,7 +73,7 @@ func runBenchmarkRF(ctx context.Context, repoRoot string, cfg Config, rf int) (R
 	if err != nil {
 		return result, err
 	}
-	grpcPF, err := startPortForward(ctx, namespace, "svc/"+grpcService.Metadata.Name, grpcPorts[0], 17912)
+	grpcPF, err := startPortForward(ctx, namespace, "svc/"+grpcService.Metadata.Name, grpcPorts[0], grpcPort)
 	if err != nil {
 		return result, err
 	}
@@ -148,8 +150,8 @@ func startMetricsPortForwards(ctx context.Context, namespace string, pods []kube
 }
 
 func runWritePhase(ctx context.Context, conn *grpc.ClientConn, cfg Config, base time.Time, liaisonEndpoints, dataEndpoints []string) (WriteResult, ResourcePhase, error) {
-	lSeriesCh, lErrCh, lCancel := startCollector(ctx, cfg.MetricsPollInterval, liaisonEndpoints)
-	dSeriesCh, dErrCh, dCancel := startCollector(ctx, cfg.MetricsPollInterval, dataEndpoints)
+	lSeriesCh, lCancel := startCollector(ctx, cfg.MetricsPollInterval, liaisonEndpoints)
+	dSeriesCh, dCancel := startCollector(ctx, cfg.MetricsPollInterval, dataEndpoints)
 
 	writeResult, err := writeMeasureData(ctx, conn, cfg, base)
 	lCancel()
@@ -159,18 +161,24 @@ func runWritePhase(ctx context.Context, conn *grpc.ClientConn, cfg Config, base 
 	if err != nil {
 		return WriteResult{}, ResourcePhase{}, err
 	}
-	if err := firstError(lErrCh, dErrCh); err != nil {
-		return WriteResult{}, ResourcePhase{}, err
+	if lSeries.Err != nil {
+		return WriteResult{}, ResourcePhase{}, lSeries.Err
+	}
+	if dSeries.Err != nil {
+		return WriteResult{}, ResourcePhase{}, dSeries.Err
+	}
+	if lSeries.Series == nil || dSeries.Series == nil {
+		return WriteResult{}, ResourcePhase{}, fmt.Errorf("collector returned nil series")
 	}
 	return writeResult, ResourcePhase{
-		Liaison: toResourceStats(lSeries),
-		Data:    toResourceStats(dSeries),
+		Liaison: toResourceStats(*lSeries.Series),
+		Data:    toResourceStats(*dSeries.Series),
 	}, nil
 }
 
 func runReadPhase(ctx context.Context, conn *grpc.ClientConn, cfg Config, base time.Time, liaisonEndpoints, dataEndpoints []string) (ReadResult, ResourcePhase, error) {
-	lSeriesCh, lErrCh, lCancel := startCollector(ctx, cfg.MetricsPollInterval, liaisonEndpoints)
-	dSeriesCh, dErrCh, dCancel := startCollector(ctx, cfg.MetricsPollInterval, dataEndpoints)
+	lSeriesCh, lCancel := startCollector(ctx, cfg.MetricsPollInterval, liaisonEndpoints)
+	dSeriesCh, dCancel := startCollector(ctx, cfg.MetricsPollInterval, dataEndpoints)
 
 	latencies, err := runReadQueries(ctx, conn, cfg, base)
 	lCancel()
@@ -180,41 +188,35 @@ func runReadPhase(ctx context.Context, conn *grpc.ClientConn, cfg Config, base t
 	if err != nil {
 		return ReadResult{}, ResourcePhase{}, err
 	}
-	if err := firstError(lErrCh, dErrCh); err != nil {
-		return ReadResult{}, ResourcePhase{}, err
+	if lSeries.Err != nil {
+		return ReadResult{}, ResourcePhase{}, lSeries.Err
+	}
+	if dSeries.Err != nil {
+		return ReadResult{}, ResourcePhase{}, dSeries.Err
+	}
+	if lSeries.Series == nil || dSeries.Series == nil {
+		return ReadResult{}, ResourcePhase{}, fmt.Errorf("collector returned nil series")
 	}
 	return summarizeLatencies(latencies), ResourcePhase{
-		Liaison: toResourceStats(lSeries),
-		Data:    toResourceStats(dSeries),
+		Liaison: toResourceStats(*lSeries.Series),
+		Data:    toResourceStats(*dSeries.Series),
 	}, nil
 }
 
-func startCollector(parent context.Context, interval time.Duration, endpoints []string) (<-chan AggregatedSeries, <-chan error, context.CancelFunc) {
-	seriesCh := make(chan AggregatedSeries, 1)
-	errCh := make(chan error, 1)
+type collectorResult struct {
+	Series *AggregatedSeries
+	Err    error
+}
+
+func startCollector(parent context.Context, interval time.Duration, endpoints []string) (<-chan collectorResult, context.CancelFunc) {
+	resultCh := make(chan collectorResult, 1)
 	ctx, cancel := context.WithCancel(parent)
 	go func() {
 		series, err := collectSeries(ctx, interval, endpoints)
-		if err != nil {
-			errCh <- err
-		} else {
-			errCh <- nil
-		}
-		seriesCh <- series
+		resultCh <- collectorResult{Series: &series, Err: err}
+		close(resultCh)
 	}()
-	return seriesCh, errCh, cancel
-}
-
-func firstError(errs ...<-chan error) error {
-	for _, ch := range errs {
-		if ch == nil {
-			continue
-		}
-		if err := <-ch; err != nil {
-			return err
-		}
-	}
-	return nil
+	return resultCh, cancel
 }
 
 func toResourceStats(series AggregatedSeries) ResourceStats {
