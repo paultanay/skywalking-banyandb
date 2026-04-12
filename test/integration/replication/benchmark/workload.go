@@ -38,13 +38,14 @@ import (
 )
 
 const (
-	benchGroupName   = "bench_measure_group"
-	benchMeasure     = "bench_measure"
-	benchTagFamily   = "default"
-	benchTagName     = "entity"
-	benchFieldName   = "value"
-	queryLimit       = 100
-	stabilizeTimeout = 3 * time.Minute
+	benchGroupName    = "bench_measure_group"
+	benchMeasure      = "bench_measure"
+	benchTagFamily    = "default"
+	benchTagName      = "entity"
+	benchFieldName    = "value"
+	queryLimit        = 100
+	stabilizeTimeout  = 3 * time.Minute
+	writeReadyTimeout = 2 * time.Minute
 )
 
 func createMeasureSchema(ctx context.Context, conn *grpc.ClientConn, rf int) error {
@@ -113,6 +114,24 @@ func writeMeasureData(ctx context.Context, conn *grpc.ClientConn, cfg Config, ba
 			if err != nil {
 				return err
 			}
+			recvErr := make(chan error, 1)
+			go func() {
+				for {
+					resp, recvErrInner := stream.Recv()
+					if recvErrInner != nil {
+						if errors.Is(recvErrInner, io.EOF) {
+							recvErr <- nil
+							return
+						}
+						recvErr <- recvErrInner
+						return
+					}
+					if resp.GetStatus() != modelv1.Status_STATUS_SUCCEED.String() {
+						recvErr <- fmt.Errorf("write failed for message_id=%d status=%s", resp.GetMessageId(), resp.GetStatus())
+						return
+					}
+				}
+			}()
 			spec := &measurev1.DataPointSpec{
 				TagFamilySpec: []*measurev1.TagFamilySpec{{
 					Name:     benchTagFamily,
@@ -151,18 +170,7 @@ func writeMeasureData(ctx context.Context, conn *grpc.ClientConn, cfg Config, ba
 			if err := stream.CloseSend(); err != nil {
 				return err
 			}
-			for {
-				resp, err := stream.Recv()
-				if err != nil {
-					if errors.Is(err, io.EOF) {
-						return nil
-					}
-					return err
-				}
-				if resp.GetStatus() != modelv1.Status_STATUS_SUCCEED.String() {
-					return fmt.Errorf("write failed for message_id=%d status=%s", resp.GetMessageId(), resp.GetStatus())
-				}
-			}
+			return <-recvErr
 		})
 	}
 
@@ -180,6 +188,88 @@ func writeMeasureData(ctx context.Context, conn *grpc.ClientConn, cfg Config, ba
 		DurationSec:   elapsed.Seconds(),
 		ThroughputPps: throughput,
 	}, nil
+}
+
+func waitForWriteReady(ctx context.Context, conn *grpc.ClientConn, probes int) error {
+	if probes <= 0 {
+		probes = 1
+	}
+	client := measurev1.NewMeasureServiceClient(conn)
+	deadline := time.Now().Add(writeReadyTimeout)
+	var lastErr error
+
+	for attempt := 0; time.Now().Before(deadline); attempt++ {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		ready := true
+		for i := 0; i < probes; i++ {
+			probeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+			err := probeWrite(probeCtx, client, fmt.Sprintf("__bench-probe-%d-%d", i, attempt))
+			cancel()
+			if err != nil {
+				ready = false
+				lastErr = err
+				break
+			}
+		}
+		if ready {
+			return nil
+		}
+		time.Sleep(2 * time.Second)
+	}
+
+	if lastErr != nil {
+		return fmt.Errorf("write path not ready: %w", lastErr)
+	}
+	return fmt.Errorf("write path not ready before timeout")
+}
+
+func probeWrite(ctx context.Context, client measurev1.MeasureServiceClient, entityID string) error {
+	stream, err := client.Write(ctx)
+	if err != nil {
+		return err
+	}
+	req := &measurev1.WriteRequest{
+		Metadata: &commonv1.Metadata{Name: benchMeasure, Group: benchGroupName},
+		DataPointSpec: &measurev1.DataPointSpec{
+			TagFamilySpec: []*measurev1.TagFamilySpec{{
+				Name:     benchTagFamily,
+				TagNames: []string{benchTagName},
+			}},
+			FieldNames: []string{benchFieldName},
+		},
+		DataPoint: &measurev1.DataPointValue{
+			Timestamp: timestamppb.New(time.Now().Truncate(time.Second)),
+			TagFamilies: []*modelv1.TagFamilyForWrite{{
+				Tags: []*modelv1.TagValue{{
+					Value: &modelv1.TagValue_Str{Str: &modelv1.Str{Value: entityID}},
+				}},
+			}},
+			Fields: []*modelv1.FieldValue{{
+				Value: &modelv1.FieldValue_Int{Int: &modelv1.Int{Value: 1}},
+			}},
+		},
+		MessageId: 1,
+	}
+	if err := stream.Send(req); err != nil {
+		return err
+	}
+	if err := stream.CloseSend(); err != nil {
+		return err
+	}
+	for {
+		resp, err := stream.Recv()
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return nil
+			}
+			return err
+		}
+		if resp.GetStatus() != modelv1.Status_STATUS_SUCCEED.String() {
+			return fmt.Errorf("probe write failed status=%s", resp.GetStatus())
+		}
+	}
 }
 
 func waitForVisibility(ctx context.Context, conn *grpc.ClientConn, base time.Time, expected int) error {

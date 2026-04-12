@@ -90,6 +90,9 @@ func runBenchmarkRF(ctx context.Context, repoRoot string, cfg Config, rf int) (R
 	if err != nil {
 		return result, err
 	}
+	if err = waitForWriteReady(rfCtx, conn, cfg.Writers); err != nil {
+		return result, err
+	}
 	baseTime := time.Now().Truncate(time.Second)
 
 	liaisonEndpoints, liaisonStop, err := startMetricsPortForwards(ctx, namespace, liaisonPods)

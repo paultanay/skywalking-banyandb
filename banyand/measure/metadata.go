@@ -336,6 +336,9 @@ func (sr *schemaRepo) OnDelete(metadata schema.Metadata) {
 
 func (sr *schemaRepo) Close() {
 	sr.cancel()
+	// Close the Repository first to stop the event watcher, ensuring no new
+	// topN processors are created while we are draining the existing ones.
+	sr.Repository.Close()
 	var err error
 	sr.topNProcessorMap.Range(func(_, val any) bool {
 		manager := val.(*topNProcessorManager)
@@ -345,7 +348,6 @@ func (sr *schemaRepo) Close() {
 	if err != nil {
 		sr.l.Error().Err(err).Msg("faced error when closing schema repository")
 	}
-	sr.Repository.Close()
 }
 
 func (sr *schemaRepo) loadMeasure(metadata *commonv1.Metadata) (*measure, bool) {
